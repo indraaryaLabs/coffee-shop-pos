@@ -174,3 +174,8 @@
   background: #8C5A3C;
   border-radius: 10px;
 }
+
+/* ─── Product Card Delete Button ─── */
+.product-card:hover .product-delete-btn {
+  opacity: 1 !important;
+}

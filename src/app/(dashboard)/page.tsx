@@ -1,67 +1,125 @@
-"use client";
+import { DashboardClient } from "./DashboardClient";
+import { db } from "@/lib/db";
+import { transactions, transactionItems, inventory, products } from "@/lib/db/schema";
+import { eq, sql, desc, lte, and, gte } from "drizzle-orm";
 
-import { useEffect } from "react";
-import { TopNav } from "@/components/layout/TopNav";
-import { SummaryCards } from "@/components/dashboard/SummaryCards";
-import { WeeklyRevenueChart } from "@/components/dashboard/WeeklyRevenueChart";
-import { TopSellers } from "@/components/dashboard/TopSellers";
-import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
-import { toast } from "sonner";
-import { motion } from "framer-motion";
+export const dynamic = "force-dynamic";
 
-export default function Dashboard() {
-  useEffect(() => {
-    // Show toast notification shortly after mounting to simulate sync
-    const timer = setTimeout(() => {
-      toast("Inventory Synced", {
-        description: "Last updated just now",
-        icon: <span className="material-symbols-outlined text-primary-foreground">check_circle</span>,
-        className: "bg-accent text-primary-foreground border-none shadow-2xl rounded-xl",
-      });
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+export default async function Dashboard() {
+  // 1. Revenue Today
+  const [revResult] = await db
+    .select({ total: sql<number>`COALESCE(sum(${transactions.totalAmount}), 0)` })
+    .from(transactions)
+    .where(sql`DATE(${transactions.createdAt}) = CURRENT_DATE`);
+    
+  const revenueToday = Number(revResult?.total || 0);
+
+  // 2. Items Sold Today (not just cups — all product types)
+  const [itemsResult] = await db
+    .select({ items: sql<number>`COALESCE(sum(${transactionItems.quantity}), 0)` })
+    .from(transactionItems)
+    .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+    .where(sql`DATE(${transactions.createdAt}) = CURRENT_DATE`);
+
+  const itemsSold = Number(itemsResult?.items || 0);
+
+  // 3. Low Stock Items — full details for the alert panel
+  const lowStockItems = await db
+    .select({
+      productId: products.id,
+      productName: products.name,
+      category: products.category,
+      currentStock: inventory.currentStock,
+      unit: inventory.unit,
+      status: inventory.status,
+    })
+    .from(inventory)
+    .innerJoin(products, eq(inventory.productId, products.id))
+    .where(lte(inventory.currentStock, 5))
+    .orderBy(inventory.currentStock)
+    .limit(10);
+
+  const lowStockCount = lowStockItems.length;
+
+  // 4. Recent Transactions
+  const recentTx = await db
+    .select({
+      id: transactions.id,
+      createdAt: transactions.createdAt,
+      totalAmount: transactions.totalAmount,
+      status: transactions.status,
+      customerName: transactions.customerName,
+      paymentMethod: transactions.paymentMethod,
+    })
+    .from(transactions)
+    .orderBy(desc(transactions.createdAt))
+    .limit(5);
+
+  // 5. Top Sellers — aggregated from actual transaction items (all time, or today)
+  const topSellersData = await db
+    .select({
+      productId: transactionItems.productId,
+      productName: products.name,
+      imageUrl: products.imageUrl,
+      totalQty: sql<number>`COALESCE(sum(${transactionItems.quantity}), 0)`,
+      totalRevenue: sql<number>`COALESCE(sum(${transactionItems.quantity} * ${transactionItems.priceAtTime}), 0)`,
+    })
+    .from(transactionItems)
+    .innerJoin(products, eq(transactionItems.productId, products.id))
+    .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+    .where(eq(transactions.status, "completed"))
+    .groupBy(transactionItems.productId, products.name, products.imageUrl)
+    .orderBy(sql`sum(${transactionItems.quantity}) DESC`)
+    .limit(5);
+
+  // 6. Weekly Performance — last 7 days revenue & order count from DB
+  const weeklyData = await db
+    .select({
+      day: sql<string>`TO_CHAR(${transactions.createdAt}, 'Dy')`,
+      date: sql<string>`DATE(${transactions.createdAt})`,
+      revenue: sql<number>`COALESCE(sum(${transactions.totalAmount}), 0)`,
+      orders: sql<number>`count(*)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        gte(transactions.createdAt, sql`CURRENT_DATE - INTERVAL '6 days'`),
+        eq(transactions.status, "completed")
+      )
+    )
+    .groupBy(sql`DATE(${transactions.createdAt})`, sql`TO_CHAR(${transactions.createdAt}, 'Dy')`)
+    .orderBy(sql`DATE(${transactions.createdAt})`);
+
+  // Build a full 7-day array (fill missing days with 0)
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weeklyPerformance = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    const dayLabel = dayNames[d.getDay()];
+    const match = weeklyData.find((w) => w.date === dateStr);
+    weeklyPerformance.push({
+      day: dayLabel,
+      revenue: match ? Number(match.revenue) : 0,
+      orders: match ? Number(match.orders) : 0,
+    });
+  }
 
   return (
-    <>
-      <TopNav
-        title="Daily Overview"
-        subtitle={new Date().toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}
-      />
-      <main className="pt-24 px-10 pb-12 min-h-screen font-sans">
-        <SummaryCards />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-10">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="lg:col-span-3 h-full"
-          >
-            <WeeklyRevenueChart />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="lg:col-span-2 h-full"
-          >
-            <TopSellers />
-          </motion.div>
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
-          <RecentTransactions />
-        </motion.div>
-      </main>
-    </>
+    <DashboardClient 
+      revenueToday={revenueToday} 
+      itemsSold={itemsSold} 
+      lowStockCount={lowStockCount} 
+      lowStockItems={lowStockItems}
+      recentTx={recentTx} 
+      topSellers={topSellersData.map((s) => ({
+        name: s.productName,
+        sold: Number(s.totalQty),
+        revenue: Number(s.totalRevenue),
+        image: s.imageUrl || "/images/placeholder.jpg",
+      }))}
+      weeklyPerformance={weeklyPerformance}
+    />
   );
 }

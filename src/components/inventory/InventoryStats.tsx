@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useInventoryStore } from "@/hooks/use-inventory";
 
 const container = {
   hidden: { opacity: 0 },
@@ -13,17 +12,12 @@ const item = {
   show: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
 };
 
-export function InventoryStats() {
-  const items = useInventoryStore(state => state.items);
-  const lowStockCount = items.filter(i => i.status === "low_stock").length;
-  
-  const totalValue = items.reduce((acc, curr) => {
-    // Extract the numeric price from strings like "$28.00 / kg"
-    const priceStr = curr.pricePerUnit.replace(/[^0-9.]/g, "");
-    const price = parseFloat(priceStr) || 0;
-    return acc + price * curr.currentStock;
-  }, 0);
+interface InventoryStatsProps {
+  lowStockCount: number;
+  totalValue: number;
+}
 
+export function InventoryStats({ lowStockCount, totalValue }: InventoryStatsProps) {
   return (
     <motion.div
       variants={container}
@@ -67,8 +61,9 @@ export function InventoryStats() {
         <div className="space-y-1 relative z-10">
           <p className="font-bold">Stock Insights</p>
           <p className="text-sm opacity-80 max-w-xs leading-relaxed">
-            Ethiopian Yirgacheffe is depleting 20% faster than usual. Consider
-            restocking by Friday.
+            {lowStockCount > 0
+              ? `You have ${lowStockCount} items running low. Consider restocking soon.`
+              : "All inventory levels are healthy. No restocking needed."}
           </p>
         </div>
         <span className="material-symbols-outlined text-5xl opacity-20 absolute right-6 group-hover:scale-110 transition-transform">

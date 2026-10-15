@@ -1,15 +1,16 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
-import { products, type CategoryValue } from "@/lib/data/products";
+import type { Product, CategoryValue } from "@/lib/data/products";
 import { ProductCard } from "./ProductCard";
 
 interface ProductGridProps {
-  activeCategory: CategoryValue;
+  products: Product[];
+  activeCategory: CategoryValue | string;
   searchQuery?: string;
 }
 
-export function ProductGrid({ activeCategory, searchQuery = "" }: ProductGridProps) {
+export function ProductGrid({ products, activeCategory, searchQuery = "" }: ProductGridProps) {
   const filtered = products.filter((p) => {
     const matchesCategory = activeCategory === "all" || p.category === activeCategory;
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());

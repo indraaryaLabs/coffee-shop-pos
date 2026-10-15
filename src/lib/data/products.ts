@@ -1,11 +1,14 @@
 export interface Product {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
-  category: "coffee" | "non-coffee" | "food" | "merchandise";
+  category: string;
   image: string;
   badge?: string;
+  stock?: number;
+  type?: "menu" | "retail" | "raw_material";
+  unavailableReason?: string;
 }
 
 export const products: Product[] = [

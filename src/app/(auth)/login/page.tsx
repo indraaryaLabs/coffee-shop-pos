@@ -7,11 +7,11 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuthStore } from "@/hooks/use-auth";
+import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,17 +23,20 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Simulate network latency / loading
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Authenticate (mock)
-    login(email);
-    
-    toast.success("Successfully signed in!");
-    setIsLoading(false);
-    
-    // Redirect entirely handled by next/navigation
-    router.push("/");
+    const { data, error } = await authClient.signIn.email({
+      email,
+      password,
+      callbackURL: "/",
+    }, {
+      onSuccess: () => {
+        toast.success("Successfully signed in!");
+        router.push("/");
+      },
+      onError: (ctx) => {
+        toast.error(ctx.error.message || "Invalid credentials. Please try again.");
+        setIsLoading(false);
+      }
+    });
   };
 
   return (
@@ -148,12 +151,17 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <a href="#" className="font-bold text-primary hover:underline">
-              Contact Admin
-            </a>
-          </p>
+          <div className="text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{" "}
+              <Link href="/signup" className="font-bold text-primary hover:underline">
+                Sign Up
+              </Link>
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              Only authorized staff can access the POS.
+            </p>
+          </div>
         </motion.div>
       </div>
     </div>

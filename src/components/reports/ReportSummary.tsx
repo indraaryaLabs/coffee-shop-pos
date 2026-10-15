@@ -12,7 +12,17 @@ const item: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-export function ReportSummary() {
+interface ReportSummaryProps {
+  totalRevenue?: number;
+  totalOrders?: number;
+  avgTicket?: number;
+}
+
+export function ReportSummary({
+  totalRevenue = 0,
+  totalOrders = 0,
+  avgTicket = 0
+}: ReportSummaryProps) {
   return (
     <motion.div
       variants={container}
@@ -26,14 +36,14 @@ export function ReportSummary() {
       >
         <div className="relative z-10">
           <p className="text-background/60 font-medium mb-1">
-            Total Daily Revenue
+            Total Historical Revenue
           </p>
           <h3 className="font-headline text-6xl font-bold tracking-tighter mb-4">
-            $4,820.50
+            ${totalRevenue.toFixed(2)}
           </h3>
           <div className="flex items-center gap-2 text-primary font-bold">
-            <span className="material-symbols-outlined">trending_up</span>
-            <span>12.5% vs yesterday</span>
+            <span className="material-symbols-outlined">database</span>
+            <span>Live from Supabase</span>
           </div>
         </div>
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-primary/20 rounded-full blur-3xl group-hover:bg-primary/30 transition-all duration-500" />
@@ -46,7 +56,7 @@ export function ReportSummary() {
         <div>
           <p className="text-muted-foreground font-medium mb-1">Total Orders</p>
           <h3 className="font-headline text-4xl font-bold text-foreground">
-            342
+            {totalOrders}
           </h3>
         </div>
         <div className="h-1 bg-secondary w-full rounded-full overflow-hidden mt-4">
@@ -66,11 +76,11 @@ export function ReportSummary() {
         <div>
           <p className="text-muted-foreground font-medium mb-1">Avg. Ticket</p>
           <h3 className="font-headline text-4xl font-bold text-foreground">
-            $14.10
+            ${avgTicket.toFixed(2)}
           </h3>
         </div>
         <p className="text-xs text-muted-foreground/80">
-          Across 5 active cashiers
+          Across all cashiers
         </p>
       </motion.div>
     </motion.div>

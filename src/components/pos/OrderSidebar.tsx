@@ -4,9 +4,20 @@ import { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useReactToPrint } from "react-to-print";
 import { useCartStore } from "@/hooks/use-cart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { processCheckout } from "@/lib/actions/transaction";
+import { ThermalReceipt } from "./ThermalReceipt";
 
 export function OrderSidebar() {
   const {
@@ -26,8 +37,22 @@ export function OrderSidebar() {
 
   const [animateRef] = useAutoAnimate({ duration: 250 });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
   const [mounted, setMounted] = useState(false);
+  
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
+
+  // Customer Dialog States
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
+  const [localCustomerName, setLocalCustomerName] = useState(customerName || "");
+  const [localTableNumber, setLocalTableNumber] = useState("");
+
+  // Track the finalized customer/table for the active order
+  const [activeCustomerName, setActiveCustomerName] = useState(customerName || "Guest");
+  const [activeTableNumber, setActiveTableNumber] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -37,12 +62,65 @@ export function OrderSidebar() {
     setImgErrors((prev) => ({ ...prev, [id]: true }));
   };
 
-  // Auto-scroll to bottom when new items are added
+  const handlePrint = useReactToPrint({
+    contentRef: receiptRef,
+    documentTitle: `Receipt_AL_${orderNumber}`,
+  });
+
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !checkoutSuccess) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [items.length]);
+  }, [items.length, checkoutSuccess]);
+
+  const handleCheckout = async () => {
+    setIsCheckingOut(true);
+    try {
+      const payload = {
+        items: items.map(i => ({ 
+          productId: i.product.id, 
+          quantity: i.quantity, 
+          price: i.product.price 
+        })),
+        totalAmount: total(),
+        paymentMethod: "cash" as const, // Currently hardcoded to cash
+        customerName: activeCustomerName === "Guest" ? undefined : activeCustomerName,
+        tableNumber: activeTableNumber || undefined,
+      };
+
+      const res = await processCheckout(payload);
+      if (res.success) {
+        toast.success("Payment Successful!", { description: `Order #${orderNumber} processed.` });
+        setLastTransactionId(res.transactionId || `AL-${orderNumber}`);
+        setCheckoutSuccess(true);
+        // Do not clear cart immediately so we can print the receipt
+      } else {
+        toast.error(res.error || "Checkout failed");
+      }
+    } catch (e: any) {
+      toast.error("Network error during checkout");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
+  const handleFinishTransaction = () => {
+    setCheckoutSuccess(false);
+    clearCart();
+    setLastTransactionId(null);
+    setActiveCustomerName("Guest");
+    setActiveTableNumber("");
+    setLocalCustomerName("");
+    setLocalTableNumber("");
+  };
+
+  const handleSaveCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActiveCustomerName(localCustomerName || "Guest");
+    setActiveTableNumber(localTableNumber);
+    setIsCustomerDialogOpen(false);
+    toast.success("Customer info updated");
+  };
 
   if (!mounted) {
     return (
@@ -51,7 +129,35 @@ export function OrderSidebar() {
   }
 
   return (
-    <aside className="w-96 h-full bg-secondary/50 flex flex-col shadow-[-10px_0_30px_rgba(75,46,43,0.03)] z-10 flex-shrink-0">
+    <aside className="w-96 h-full bg-secondary/50 flex flex-col shadow-[-10px_0_30px_rgba(75,46,43,0.03)] z-10 flex-shrink-0 print:hidden relative">
+      {/* Transaction Success Overlay */}
+      {checkoutSuccess && (
+        <div className="absolute inset-0 bg-background/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+          <div className="w-20 h-20 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-6">
+            <span className="material-symbols-outlined text-4xl">check_circle</span>
+          </div>
+          <h2 className="font-headline font-extrabold text-3xl mb-2">Payment <br/>Successful</h2>
+          <p className="text-muted-foreground mb-8">Transaction has been recorded to database and inventory has been deducted.</p>
+          
+          <div className="w-full space-y-3">
+            <Button 
+              onClick={() => handlePrint()}
+              variant="outline"
+              className="w-full py-6 rounded-xl border-2 border-border gap-2 font-bold text-lg"
+            >
+              <span className="material-symbols-outlined">print</span>
+              Print Receipt
+            </Button>
+            <Button 
+              onClick={handleFinishTransaction}
+              className="w-full py-6 rounded-xl bg-primary text-primary-foreground font-bold text-lg"
+            >
+              New Order
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Order Header */}
       <div className="p-6">
         <div className="flex items-center justify-between mb-2">
@@ -66,7 +172,7 @@ export function OrderSidebar() {
           </Badge>
         </div>
         <p className="text-xs text-accent font-medium">
-          Customer: {customerName}
+          Customer: {activeCustomerName} {activeTableNumber ? `• Table ${activeTableNumber}` : ""}
         </p>
       </div>
 
@@ -93,7 +199,7 @@ export function OrderSidebar() {
                   {!imgErrors[item.product.id] ? (
                     <Image
                       unoptimized
-                      src={item.product.image}
+                      src={item.product.image || "/images/placeholder.jpg"}
                       alt={item.product.name}
                       fill
                       className="object-cover"
@@ -178,45 +284,84 @@ export function OrderSidebar() {
 
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => toast("Apply Voucher", { description: "Opening scanner..." })}
-            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl bg-card border border-border text-accent hover:bg-primary/5 transition-colors active:scale-95"
+            onClick={() => handlePrint()}
+            disabled={items.length === 0}
+            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl bg-card border border-border text-accent hover:bg-primary/5 transition-colors active:scale-95 disabled:opacity-50 disabled:active:scale-100"
           >
             <span className="material-symbols-outlined text-xl">
-              confirmation_number
+              print
             </span>
             <span className="text-[10px] font-bold uppercase tracking-widest">
-              Voucher
+              Print Bill
             </span>
           </button>
-          <button
-            onClick={() => toast("Assign Customer", { description: "Fetching loyalty directory..." })}
-            className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl bg-card border border-border text-accent hover:bg-primary/5 transition-colors active:scale-95"
-          >
-            <span className="material-symbols-outlined text-xl">
-              person_add
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-widest">
-              Customer
-            </span>
-          </button>
+          
+          <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
+            <DialogTrigger render={
+              <button
+                className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl bg-card border border-border text-accent hover:bg-primary/5 transition-colors active:scale-95"
+              />
+            }>
+              <span className="material-symbols-outlined text-xl">
+                person_add
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                Customer
+              </span>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle className="font-headline font-extrabold text-2xl">Customer Details</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSaveCustomer} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-muted-foreground">Customer Name</label>
+                  <Input 
+                    value={localCustomerName}
+                    onChange={(e) => setLocalCustomerName(e.target.value)}
+                    placeholder="e.g. John Doe" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-muted-foreground">Table Number (Optional)</label>
+                  <Input 
+                    value={localTableNumber}
+                    onChange={(e) => setLocalTableNumber(e.target.value)}
+                    placeholder="e.g. 12" 
+                  />
+                </div>
+                <Button type="submit" className="w-full mt-4 bg-primary text-primary-foreground font-bold rounded-xl py-6 text-lg">
+                  Save Customer Info
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+
         </div>
 
         <Button
-          onClick={() => {
-            toast.success("Payment Successful!", { description: `Order #${orderNumber} processed.` });
-            clearCart();
-          }}
-          disabled={items.length === 0}
+          onClick={handleCheckout}
+          disabled={items.length === 0 || isCheckingOut}
           className="w-full py-6 rounded-2xl bg-primary text-primary-foreground font-headline font-extrabold text-xl flex items-center justify-center gap-3 shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
         >
-          <span>Pay Now</span>
-          <span className="material-symbols-outlined">arrow_forward</span>
+          <span>{isCheckingOut ? "Processing..." : "Pay Now"}</span>
+          {!isCheckingOut && <span className="material-symbols-outlined">arrow_forward</span>}
         </Button>
-
-        <p className="text-center text-[10px] text-muted-foreground/50 uppercase tracking-[0.2em]">
-          Transaction ID: AL-{orderNumber}-88B
-        </p>
       </div>
+
+      {/* Hidden layout specifically injected for Thermal Printers */}
+      <ThermalReceipt 
+        ref={receiptRef}
+        items={items}
+        subtotal={subtotal()}
+        tax={tax()}
+        total={total()}
+        orderNumber={orderNumber}
+        transactionId={lastTransactionId}
+        customerName={activeCustomerName}
+        tableNumber={activeTableNumber}
+        paymentMethod="CASH"
+      />
     </aside>
   );
 }

@@ -12,12 +12,17 @@ import {
 import { weeklyRevenue } from "@/lib/data/transactions";
 import { useTheme } from "next-themes";
 
-export function VolumeTrends() {
+interface VolumeTrendsProps {
+  data?: any[];
+}
+
+export function VolumeTrends({ data = [] }: VolumeTrendsProps) {
   const [metric, setMetric] = useState<"hourly" | "daily">("daily");
   const { resolvedTheme } = useTheme();
 
   // Find max value to color it differently
-  const maxValue = Math.max(...weeklyRevenue.map((d) => d.orders));
+  const displayData = data.length > 0 ? data : weeklyRevenue;
+  const maxValue = Math.max(...displayData.map((d) => d.orders));
 
   const baseColor = resolvedTheme === "dark" ? "#8C5A3C" : "#D9C5B2";
   const hoverColor = resolvedTheme === "dark" ? "#C08552" : "#8C5A3C";
@@ -55,7 +60,7 @@ export function VolumeTrends() {
 
       <div className="flex-1 min-h-[160px]">
         <ResponsiveContainer width="100%" height="100%" minHeight={160}>
-          <BarChart data={weeklyRevenue} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+          <BarChart data={displayData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="day"
               axisLine={false}
@@ -82,7 +87,7 @@ export function VolumeTrends() {
               }}
             />
             <Bar dataKey="orders" radius={[12, 12, 0, 0]} animationDuration={1000}>
-              {weeklyRevenue.map((entry, index) => (
+              {displayData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.orders === maxValue ? maxColor : baseColor}

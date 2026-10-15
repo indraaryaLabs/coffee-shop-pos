@@ -6,7 +6,8 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuthStore } from "@/hooks/use-auth";
+import { authClient } from "@/lib/auth-client";
+import { toast } from "sonner";
 
 const navItems = [
   { label: "Dashboard", icon: "dashboard", href: "/" },
@@ -20,10 +21,42 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const { user, logout } = useAuthStore();
+  const { data: session } = authClient.useSession();
   const [mounted, setMounted] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  const user = session?.user;
+  const userName = user?.name || "User";
+  const userRole = (user as any)?.role || "barista";
+  const userImage = user?.image;
+  const userInitials = userName
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  // Map role to display label
+  const roleDisplayMap: Record<string, string> = {
+    admin: "Administrator",
+    barista: "Barista",
+  };
+  const roleLabel = roleDisplayMap[userRole] || userRole;
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+        },
+        onError: (ctx) => {
+          toast.error(ctx.error.message || "Failed to logout");
+        }
+      }
+    });
+  };
 
   return (
     <aside className="h-screen w-64 fixed left-0 top-0 bg-sidebar flex flex-col py-6 z-50">
@@ -104,32 +137,36 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* User Profile */}
+      {/* User Profile — reads from Better Auth session */}
       <div className="px-6 mt-auto">
         <button
-          onClick={() => {
-            logout();
-            router.push("/login");
-          }}
+          onClick={handleLogout}
           className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-destructive/10 group transition-all duration-200 border border-transparent hover:border-destructive/20 active:scale-95"
           title="Sign Out"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden relative border border-border">
-              <Image
-                unoptimized
-                src="/images/barista-profile.jpg"
-                alt={user?.name || "User"}
-                fill
-                className="object-cover"
-              />
+              {userImage && !imgError ? (
+                <Image
+                  unoptimized
+                  src={userImage}
+                  alt={userName}
+                  fill
+                  className="object-cover"
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                <span className="text-sm font-headline font-bold text-muted-foreground">
+                  {userInitials}
+                </span>
+              )}
             </div>
             <div className="overflow-hidden text-left">
-              <p className="text-sm font-bold truncate text-foreground group-hover:text-destructive transition-colors">
-                {user?.name || "Julian V."}
+              <p className="text-sm font-bold truncate text-foreground group-hover:text-destructive transition-colors max-w-[120px]">
+                {userName}
               </p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-                {user?.role || "Manager"}
+                {roleLabel}
               </p>
             </div>
           </div>

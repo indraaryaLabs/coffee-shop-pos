@@ -1,0 +1,210 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
+
+export default function SignupPage() {
+  const router = useRouter();
+  
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "barista">("barista");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !password) return toast.error("Please fill in all fields.");
+
+    setIsLoading(true);
+
+    const { data, error } = await authClient.signUp.email({
+      email,
+      password,
+      name,
+      role, // Custom field
+      callbackURL: "/",
+    }, {
+      onSuccess: () => {
+        toast.success("Account created successfully!");
+        router.push("/");
+      },
+      onError: (ctx) => {
+        console.error("Signup Error Context:", ctx);
+        console.error("Signup Error Details:", ctx.error);
+        toast.error(ctx.error.message || "Failed to create account. Please check the console for details.");
+        setIsLoading(false);
+      }
+    });
+  };
+
+  return (
+    <div className="min-h-screen w-full flex bg-background">
+      {/* Left Panel: Cover Image */}
+      <div className="hidden lg:flex w-1/2 relative bg-primary items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 bg-black/30 z-10 mix-blend-multiply" />
+        <Image
+          unoptimized
+          src="/images/barista-profile.jpg"
+          alt="The Atelier Coffee Shop"
+          fill
+          priority
+          className="object-cover scale-105"
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+          className="relative z-20 text-center max-w-sm"
+        >
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-primary/90 flex items-center justify-center text-primary-foreground mb-6 shadow-xl backdrop-blur-md border border-white/20">
+            <span className="material-symbols-outlined text-4xl">coffee</span>
+          </div>
+          <h1 className="font-headline text-5xl font-extrabold text-white tracking-widest uppercase mb-4 drop-shadow-md">
+            The Atelier
+          </h1>
+          <p className="text-white/80 font-medium tracking-widest uppercase text-sm drop-shadow-sm">
+            Join the craft, master the cup.
+          </p>
+        </motion.div>
+      </div>
+
+      {/* Right Panel: Signup Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-24 relative">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md mx-auto space-y-8"
+        >
+          <div className="space-y-2 text-center lg:text-left">
+            <h2 className="font-headline text-4xl font-extrabold text-foreground tracking-tight">
+              Create Account
+            </h2>
+            <p className="text-muted-foreground font-medium">
+              Start your journey with The Atelier.
+            </p>
+          </div>
+
+          <form onSubmit={handleSignUp} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-foreground">Full Name</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-2.5 text-muted-foreground text-xl">
+                    person
+                  </span>
+                  <Input
+                    type="text"
+                    required
+                    placeholder="Julian Atelier"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="pl-10 h-12 bg-card border-border rounded-xl shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-foreground">Email</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-2.5 text-muted-foreground text-xl">
+                    mail
+                  </span>
+                  <Input
+                    type="email"
+                    required
+                    placeholder="julian@theatelier.co"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 h-12 bg-card border-border rounded-xl shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-foreground">Password</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-2.5 text-muted-foreground text-xl">
+                    lock
+                  </span>
+                  <Input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 h-12 bg-card border-border rounded-xl shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-foreground">Role</label>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setRole("barista")}
+                    className={`flex-1 h-12 rounded-xl border-2 font-bold transition-all ${
+                      role === "barista"
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border bg-card text-muted-foreground hover:border-border/80"
+                    }`}
+                  >
+                    Barista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("admin")}
+                    className={`flex-1 h-12 rounded-xl border-2 font-bold transition-all ${
+                      role === "admin"
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border bg-card text-muted-foreground hover:border-border/80"
+                    }`}
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <motion.span
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, ease: "linear", duration: 1 }}
+                  className="material-symbols-outlined text-lg"
+                >
+                  progress_activity
+                </motion.span>
+              ) : (
+                <>
+                  <span>Sign Up</span>
+                  <span className="material-symbols-outlined text-lg">person_add</span>
+                </>
+              )}
+            </Button>
+          </form>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/login" className="font-bold text-primary hover:underline">
+              Sign In
+            </Link>
+          </p>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

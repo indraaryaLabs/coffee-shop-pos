@@ -16,10 +16,11 @@ import { Button } from "@/components/ui/button";
 
 interface TransactionTableProps {
   searchQuery?: string;
+  items?: any[];
 }
 
-export function TransactionTable({ searchQuery = "" }: TransactionTableProps) {
-  const filteredTransactions = transactions.filter((tx) =>
+export function TransactionTable({ searchQuery = "", items = [] }: TransactionTableProps) {
+  const filteredTransactions = items.filter((tx) =>
     tx.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
     tx.customer.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -60,13 +61,17 @@ export function TransactionTable({ searchQuery = "" }: TransactionTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-border">
-            {filteredTransactions.map((tx) => (
+            {filteredTransactions.length === 0 ? (
+               <TableRow>
+                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No transactions available.</TableCell>
+               </TableRow>
+            ) : filteredTransactions.map((tx) => (
               <TableRow
                 key={tx.id}
                 className="hover:bg-secondary/20 transition-colors"
               >
                 <TableCell className="px-8 py-5">
-                  <span className="font-mono text-xs font-bold text-muted-foreground">
+                   <span className="font-mono text-xs font-bold text-muted-foreground">
                     {tx.id}
                   </span>
                 </TableCell>
@@ -84,7 +89,7 @@ export function TransactionTable({ searchQuery = "" }: TransactionTableProps) {
                       {tx.cashierInitials}
                     </div>
                     <span className="text-sm font-medium text-foreground">
-                      {tx.cashier}
+                      {tx.cashier.length > 8 ? tx.cashier.substring(0,8) + '...' : tx.cashier}
                     </span>
                   </div>
                 </TableCell>
@@ -93,7 +98,7 @@ export function TransactionTable({ searchQuery = "" }: TransactionTableProps) {
                     variant="secondary"
                     className="bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-wider border-none"
                   >
-                    {tx.paymentMethod.replace("_", " ")}
+                    {tx.paymentMethod.toUpperCase().replace("_", " ")}
                   </Badge>
                 </TableCell>
                 <TableCell className="px-8 py-5 text-right font-headline font-bold text-foreground">
@@ -119,8 +124,8 @@ export function TransactionTable({ searchQuery = "" }: TransactionTableProps) {
 
       <div className="px-8 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground/60">
-          Showing <span className="font-bold text-foreground">1 - 8</span> of{" "}
-          342 transactions
+          Showing <span className="font-bold text-foreground">All</span> of{" "}
+          {items.length} transactions
         </p>
         <div className="flex items-center gap-2">
           <Button
